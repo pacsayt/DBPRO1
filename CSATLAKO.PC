@@ -1,0 +1,72 @@
+/* csatlako.pc */
+
+/* #include "stdafx.h" */
+#include <string.h>
+#include "ensqlcam.h"
+
+
+#define SQLCA_STORAGE_CLASS extern
+#undef  SQLCA_INIT
+
+EXEC SQL INCLUDE sqlca ;
+
+long SQL_Csatlakozas(const char* pszNev, const char* pszJelszo)
+{
+  EXEC SQL BEGIN DECLARE SECTION ;
+
+    /* User-defined type for null-terminated strings */
+/*
+    EXEC SQL TYPE asciz IS STRING(20);
+    asciz     username[20];
+    asciz     password[20];
+ez, sajnos nem mukodik, mert az asciz-t sehol sem definialja ...
+*/
+
+/*    char      job[10][21]; */
+    VARCHAR username[80] ;
+    VARCHAR password[80] ;
+
+/*    int       SQLCODE ; */
+
+  EXEC SQL END DECLARE SECTION;
+
+  EXEC SQL WHENEVER SQLERROR GOTO sql_hiba ;
+
+  if ( strlen((char *)pszNev) >= 80 || strlen((char *)pszJelszo) >= 80 )
+    return sqlca.sqlcode ;
+
+  /* Connect to ORACLE. */
+  strcpy((char *)username.arr, pszNev) ;
+  username.len = (short) strlen((char *)username.arr) ;
+
+  strcpy((char *)password.arr, pszJelszo) ;
+  password.len = (short) strlen((char *)password.arr) ;
+
+/*
+  strcpy(username, pszNev) ;
+  strcpy(password, pszJelszo) ;
+*/
+
+  EXEC SQL CONNECT :username IDENTIFIED BY :password ;
+
+  EXEC SQL COMMIT WORK ;
+
+  SQL_SQLCAFeltolt() ;
+
+  return sqlca.sqlcode ;
+
+sql_hiba :
+
+  EXEC SQL WHENEVER SQLERROR CONTINUE ;
+
+  SQL_SQLCAFeltolt() ;
+
+  EXEC SQL ROLLBACK WORK RELEASE ;
+
+  return sqlca.sqlcode ;
+}
+
+void SQL_Kilepes()
+{
+  EXEC SQL ROLLBACK WORK RELEASE ;
+}

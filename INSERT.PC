@@ -1,0 +1,139 @@
+/* insert.pc */
+
+#include <string.h>
+#include <malloc.h>
+#include "ensqlcam.h"
+
+#define SQLCA_STORAGE_CLASS extern
+#undef  SQLCA_INIT
+
+EXEC SQL INCLUDE sqlca ;
+
+long SQL_Insert(int nSzamTiz, char cSzamKetNN, double dSzamHarHar,
+                char* pszChr_10, char* pszVchr2_15, char* pszDatum)
+{
+  EXEC SQL BEGIN DECLARE SECTION ;
+
+    /* szamok TABLA          */
+    unsigned    n_szam_tiz ;
+    int    n_szam_ket_nn ;
+    double d_szam_har_har;
+
+    /* indikatorvaltozok - INSERT-nel NULL ertekek beirasahoz 
+    short in_szam_tiz ;
+    short ic_szam_ket_nn ;
+    short if_szam_har_har;
+*/
+    /* sztringek TABLA       */
+    char  c_chr_10[11]   ;
+    char  c_vchr2_15[16] ;
+
+    /* indikatorvaltozok 
+    short ic_chr_10 ;
+    short ic_vchr2_15 ;
+*/
+    /* a kenyszer TABLA itt nem erdkes */
+
+    /* datum TABLA */
+    char  c_datum[13] ;
+
+    /* indikatorvaltozo 
+    short ic_datum ;
+*/
+  EXEC SQL END DECLARE SECTION ;
+
+  long l_SQLCODE ;
+
+  n_szam_tiz     = nSzamTiz    ;
+  n_szam_ket_nn  = cSzamKetNN  ;
+  d_szam_har_har = dSzamHarHar ;
+
+  strcpy(   c_chr_10, pszChr_10) ;
+  strcpy( c_vchr2_15, pszVchr2_15) ;
+  strcpy(    c_datum, pszDatum) ;
+
+  EXEC SQL WHENEVER SQLERROR GOTO sql_hiba ;
+
+
+  EXEC SQL INSERT INTO szamok( szam_tiz, szam_ket_nn, szam_har_har)
+             VALUES( :n_szam_tiz, :n_szam_ket_nn, :d_szam_har_har ) ;
+
+  EXEC SQL INSERT INTO sztringek( chr_10, vchr2_15)
+             VALUES( :c_chr_10, :c_vchr2_15 ) ;
+
+  EXEC SQL INSERT INTO datum( datum)
+             VALUES( TO_DATE( :c_datum, 'YYYY-MM-DD') ) ;
+
+  SQL_SQLCAFeltolt() ;
+
+  l_SQLCODE = sqlca.sqlcode ;
+
+  EXEC SQL COMMIT WORK ;
+
+  return l_SQLCODE ;
+
+sql_hiba :
+  
+  EXEC SQL WHENEVER SQLERROR CONTINUE ;
+
+  SQL_SQLCAFeltolt() ;
+
+  l_SQLCODE = sqlca.sqlcode ;
+
+  EXEC SQL ROLLBACK WORK ;
+
+  return l_SQLCODE ;
+}
+
+long SQL_TombInsert(unsigned* pTomb, unsigned nTombMeret)
+{
+  EXEC SQL BEGIN DECLARE SECTION ;
+
+    unsigned* p_tomb ;
+	unsigned  n_tomb_meret ;
+
+  EXEC SQL END DECLARE SECTION ;
+
+  long l_SQLCODE ;
+
+  if ( pTomb == NULL )
+    goto sql_hiba ;
+
+  p_tomb       = pTomb ;
+/*
+  Igy sem tud kb 60000 elemnel tobbet INSERTalni: nem a host valtozo a baj
+  p_tomb = (unsigned*) malloc( sizeof(unsigned)*nTombMeret) ;
+
+  if ( p_tomb == NULL )
+    return -1 ; 
+
+  memcpy( p_tomb, pTomb, sizeof(unsigned)*nTombMeret) ;
+*/
+  n_tomb_meret = nTombMeret ;
+
+  EXEC SQL WHENEVER SQLERROR GOTO sql_hiba ;
+
+  EXEC SQL FOR :n_tomb_meret INSERT INTO szulo VALUES (:p_tomb) ;
+
+  l_SQLCODE = sqlca.sqlcode ;
+
+  EXEC SQL COMMIT WORK ;
+
+/*  free( p_tomb) ; */
+
+  return l_SQLCODE ;
+  
+sql_hiba :
+  
+  EXEC SQL WHENEVER SQLERROR CONTINUE ;
+
+  SQL_SQLCAFeltolt() ;
+
+  l_SQLCODE = sqlca.sqlcode ;
+
+  EXEC SQL ROLLBACK WORK ;
+
+/*  free( p_tomb) ; */
+
+  return l_SQLCODE ;
+}

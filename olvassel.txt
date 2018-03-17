@@ -1,0 +1,12 @@
+olvassel.txt
+
+DBPRO1 - Embedded SQL-C technikakat gyakorlo, kiserleti program
+
+1999.03.15 Az elso cpp-s verzio. Az 'sqlca' globalis valtozo egy helyen, az 'ensqlcam.cpp'-
+           ben van definialva, masutt (*.pc) csak deklaralva az adott makrokkal.
+           Sebessegmeres INSERT-nel :
+           100000 elem helyett valamilyen titokzatos ok miatt csak 34464 elemet inzertal...
+           no constraint : ~9 s
+           primary key   : ~19 s
+           foreign key   : ~19 s
+

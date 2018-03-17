@@ -1,0 +1,331 @@
+/* select.pc */
+
+#include "stdafx.h"
+
+#include <string.h>
+#include "ensqlcam.h"
+
+#define SQLCA_STORAGE_CLASS extern
+#undef  SQLCA_INIT
+
+EXEC SQL INCLUDE sqlca ;
+
+long SQL_Select(int* pSzamTiz, char* pSzamKetNN, double* pSzamHarHar,
+                     char* pszChr_10, char* pszVchr2_15, char* pszDatum)
+{
+  EXEC SQL BEGIN DECLARE SECTION ;
+
+    /* szamok TABLA          */
+    int    n_szam_tiz ;
+/*    char   c_szam_ket_nn ; */
+    int    c_szam_ket_nn ;
+    double d_szam_har_har;
+
+    /* indikatorvaltozok 
+    short in_szam_tiz ;
+    short ic_szam_ket_nn ;
+    short id_szam_har_har; */
+
+    /* sztringek TABLA       */
+    char  c_chr_10[11]   ;
+    char  c_vchr2_15[16] ;
+
+    /* indikatorvaltozok */
+    short ic_chr_10 ;
+    short ic_vchr2_15 ;
+
+    /* a kenyszer TABLA itt nem erdkes */
+
+    /* datum TABLA */
+    char  c_datum[13] ;
+
+    /* indikatorvaltozo */
+    short ic_datum ;
+
+  EXEC SQL END DECLARE SECTION ;
+
+  long l_SQLCODE ;
+
+  n_szam_tiz     = 0 ;
+  c_szam_ket_nn  = 0 ;
+  d_szam_har_har = 0.0 ;
+ 
+  /* A char-szeru host valtozokat mindig inicializalni kell, \0 nelkul ! */
+  memset( c_chr_10, 32, 10) ;
+  c_chr_10[10] = '\0' ;
+
+  memset( c_vchr2_15, 32, 15) ;
+  c_chr_10[15] = '\0' ;
+
+  EXEC SQL WHENEVER SQLERROR GOTO sql_hiba ;
+
+/*
+  EXEC SQL SELECT szam_tiz, szam_ket_nn, szam_har_har
+               INTO :n_szam_tiz:in_szam_tiz, :c_szam_ket_nn:ic_szam_ket_nn, :d_szam_har_har:id_szam_har_har
+             FROM szamok ;
+*/
+
+  EXEC SQL SELECT szam_tiz, szam_ket_nn, szam_har_har
+               INTO :n_szam_tiz, :c_szam_ket_nn, :d_szam_har_har
+             FROM szamok
+             WHERE szam_ket_nn = 11 ;
+
+  EXEC SQL SELECT chr_10, vchr2_15
+               INTO :c_chr_10:ic_chr_10, :c_vchr2_15:ic_vchr2_15
+             FROM sztringek
+             WHERE vchr2_15 = '123456789012345' ;
+
+  EXEC SQL SELECT TO_CHAR( datum, 'YYYY-MM-DD')
+               INTO :c_datum:ic_datum
+             FROM datum
+             WHERE datum = TO_DATE('1998-12-18', 'YYYY-MM-DD') ;
+
+  SQL_SQLCAFeltolt() ;
+
+  l_SQLCODE = sqlca.sqlcode ;
+
+  EXEC SQL COMMIT WORK ;
+
+  *pSzamTiz    = n_szam_tiz ;
+  *pSzamKetNN  = c_szam_ket_nn ;
+  *pSzamHarHar = d_szam_har_har ;
+
+  strcpy(   pszChr_10, c_chr_10) ;
+  strcpy( pszVchr2_15, c_vchr2_15) ;
+
+  strcpy(    pszDatum, c_datum) ;
+
+  return l_SQLCODE ;
+
+sql_hiba :
+
+  EXEC SQL WHENEVER SQLERROR CONTINUE ;
+
+  SQL_SQLCAFeltolt() ;
+
+  l_SQLCODE = sqlca.sqlcode ;
+
+  EXEC SQL ROLLBACK WORK ;
+
+  return l_SQLCODE ;
+}
+
+long SQL_SelectCursor(sSzamok* pSzamBuff)
+{
+  EXEC SQL BEGIN DECLARE SECTION ;
+
+    struct sql_sSzamok
+    {
+      unsigned    n_szam_tiz ;
+      int    c_szam_ket_nn ;
+      double d_szam_har_har;
+    } szam_tomb[2] ;
+
+/*    struct tSzamok szam_tomb[2] ;
+    int    n_szam_tiz[2]    ;
+    int    c_szam_ket_nn[2] ;
+    double d_szam_har_har[2]; */
+
+  EXEC SQL END DECLARE SECTION ;
+
+  static char cKurzorNyitva = 'N' ;
+  long l_SQLCODE ;
+
+  EXEC SQL WHENEVER NOTFOUND GOTO sql_nincstobb ;
+  EXEC SQL WHENEVER SQLERROR GOTO sql_hiba ;
+
+  if ( cKurzorNyitva == 'N' )
+  {
+	cKurzorNyitva = 'I' ;
+
+    EXEC SQL DECLARE szamok_cur CURSOR FOR
+      SELECT szam_tiz, szam_ket_nn, szam_har_har
+      FROM szamok ;
+
+    EXEC SQL OPEN szamok_cur ;
+  }
+
+  EXEC SQL FETCH szamok_cur
+    INTO :szam_tomb ;
+/*    INTO :n_szam_tiz, :c_szam_ket_nn, :d_szam_har_har ; */
+
+  memcpy( pSzamBuff, szam_tomb, 2*sizeof(struct sql_sSzamok)) ;
+
+  SQL_SQLCAFeltolt() ;
+
+  l_SQLCODE = sqlca.sqlcode ;
+
+/*  EXEC SQL COMMIT WORK ; Kell ez minden egyes FETCH utan ?!? */
+
+
+/*
+  (pSzamBuff+0)->n_szam_tiz    = n_szam_tiz[0]    ;
+  (pSzamBuff+0)->c_szam_ket_nn = c_szam_ket_nn[0] ;
+  (pSzamBuff+0)->d_szam_har_har= d_szam_har_har[0];
+
+  (pSzamBuff+1)->n_szam_tiz    = n_szam_tiz[1]    ;
+  (pSzamBuff+1)->c_szam_ket_nn = c_szam_ket_nn[1] ;
+  (pSzamBuff+1)->d_szam_har_har= d_szam_har_har[1];
+*/
+  return l_SQLCODE ;
+
+sql_nincstobb :
+
+  /* Ha a blokkmeretnel kevesebbet talal, azt is at kell masolni ! */
+  memcpy( pSzamBuff, szam_tomb, 2*sizeof(struct sql_sSzamok)) ;
+
+  SQL_SQLCAFeltolt() ;
+
+  l_SQLCODE = sqlca.sqlcode ;
+
+  EXEC SQL CLOSE szamok_cur ;
+  cKurzorNyitva = 'N' ;
+
+  return l_SQLCODE ;
+
+sql_hiba :
+
+  EXEC SQL WHENEVER SQLERROR CONTINUE ;
+
+  SQL_SQLCAFeltolt() ;
+
+  l_SQLCODE = sqlca.sqlcode ;
+
+  EXEC SQL CLOSE szamok_cur ;
+  cKurzorNyitva = 'N' ;
+ 
+  EXEC SQL ROLLBACK WORK ;
+
+  return l_SQLCODE ;
+}
+
+long SQL_SelectCrsrPnt()
+{
+  EXEC SQL BEGIN DECLARE SECTION ;
+
+/*    unsigned* p_szam_tomb ;*/
+    unsigned  p_szam_tomb[10] ;
+    unsigned  n_szam_tomb_mer ;
+
+    unsigned  n_for ;
+
+    unsigned  n_szam_tomb_ki[10] ;
+
+  EXEC SQL END DECLARE SECTION ;
+
+  long l_SQLCODE ;
+
+  unsigned i ;
+  unsigned nAktElh, nOsszElh ;
+
+  EXEC SQL WHENEVER SQLERROR GOTO sql_hiba ;
+  EXEC SQL WHENEVER NOTFOUND DO break ;
+
+  nAktElh  = 0 ;
+  nOsszElh = 0 ;
+
+  n_szam_tomb_mer = 10 ;
+/*  p_szam_tomb = new unsigned[n_szam_tomb_mer] ;*/
+
+  p_szam_tomb[0] = 111111111 ;
+  p_szam_tomb[1] = 222222222 ;
+  p_szam_tomb[2] = 333333333 ;
+  p_szam_tomb[3] = 444444444 ;
+  p_szam_tomb[4] = 555555555 ;
+  p_szam_tomb[5] = 666666666 ;
+  p_szam_tomb[6] = 777777777 ;
+  p_szam_tomb[7] = 888888888 ;
+  p_szam_tomb[8] = 999999999 ;
+  p_szam_tomb[9] = 000000000 ;
+
+  EXEC SQL PREPARE tomb_ptr_utas FROM "SELECT szam_ket_nn FROM szamok WHERE szam_tiz = :p" ;
+
+  EXEC SQL DECLARE c_tomb CURSOR FOR tomb_ptr_utas ;
+/*
+    SELECT szam_ket_nn
+      FROM szamok
+      WHERE szam_tiz = :p_szam_tomb ;
+*/
+  /* A dinamikusan foglalt tomb n_for-adik elemet veszi, ha nincs FOR, az elsot */
+  n_for = 3 ;
+  EXEC SQL /*FOR :n_for n_szam_tomb_mer*/
+    OPEN c_tomb USING :p_szam_tomb ;
+
+  while ( TRUE )
+  {
+    EXEC SQL FETCH c_tomb INTO :n_szam_tomb_ki ;
+
+    for ( i = 0 ; i < 10 ; i++ )
+    {
+      TRACE("\nn_szam_tomb_ki[%d]:%d\n", i, n_szam_tomb_ki[i]) ;
+    }
+
+    nOsszElh = sqlca.sqlerrd[2] ;
+  }
+
+  nAktElh = sqlca.sqlerrd[2] - nOsszElh ;
+
+  for ( i = 0 ; i < nAktElh ; i++ )
+  {
+    TRACE("\nn_szam_tomb_ki[%d]:%d\n", i, n_szam_tomb_ki[i]) ;
+  }
+
+sql_hiba :
+
+/*  delete [] p_szam_tomb ;*/
+
+  EXEC SQL WHENEVER SQLERROR CONTINUE ;
+
+  SQL_SQLCAFeltolt() ;
+
+  l_SQLCODE = sqlca.sqlcode ;
+
+  EXEC SQL CLOSE c_tomb ;
+
+  EXEC SQL ROLLBACK WORK ;
+
+  return l_SQLCODE ;
+} ;
+
+long SQL_SelectSequence(unsigned* pSzam)
+{
+  EXEC SQL BEGIN DECLARE SECTION ;
+
+    unsigned n_seq_szam ;
+
+  EXEC SQL END DECLARE SECTION ;
+
+  long l_SQLCODE ;
+
+  /* Minden WHENEVER a kovetkezo azonos tipusuig, ill. a file vegeig el!    */
+  EXEC SQL WHENEVER NOTFOUND CONTINUE ;
+  EXEC SQL WHENEVER SQLERROR GOTO sql_hiba ;
+
+  /* Ha kurzor erteket valtozoba akarom tolteni, kell egy tabla, melybol    */
+  /* pontosan 1 sor szelektalodik ki: seq.seq kamu tabla, melyben 1 sor van */
+  EXEC SQL SELECT seq_proba.NEXTVAL
+               INTO :n_seq_szam
+             FROM seq ;
+
+  *pSzam = n_seq_szam ;
+
+  SQL_SQLCAFeltolt() ;
+
+  l_SQLCODE = sqlca.sqlcode ;
+
+  EXEC SQL COMMIT WORK ;
+
+  return l_SQLCODE ;
+
+sql_hiba :
+
+  EXEC SQL WHENEVER SQLERROR CONTINUE ;
+
+  SQL_SQLCAFeltolt() ;
+
+  l_SQLCODE = sqlca.sqlcode ;
+
+  EXEC SQL ROLLBACK WORK ;
+
+  return l_SQLCODE ;
+}
